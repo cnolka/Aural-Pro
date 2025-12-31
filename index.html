@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aural Pro v3.7.0</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; }
+        canvas { display: block; outline: none; }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        console.log("[AuralPro] v3.7.0 Initializing (Light Fix + New Models)...");
+
+        // --- Config & Targets ---
+        const TARGETS = {
+            count: 80000,
+            scale: 1.1,
+            physPulse: 5.0,
+            physDamping: 0.5,
+            lightPulse: 5.0,
+            lightDamping: 0.3,
+            chaos: 0.5,
+            speed: 0.5,
+            autoRotateSpeed: 0.1,
+            bloomStrength: 1.2,
+            sharpness: 0.8,
+            camZoom: 90,
+            camPanX: 0,
+            camPanY: 0
+        };
+
+        const CONFIG = {
+            currentCount: 80000,
+            scale: 1.1,
+            physPulse: 5.0,
+            physDamping: 0.5,
+            lightPulse: 5.0,
+            lightDamping: 0.3,
+            chaos: 0.5,
+            speed: 0.5,
+            autoRotateSpeed: 0.1,
+            bloomStrength: 1.2,
+            sharpness: 0.8,
+            
+            maxCount: 200000,
+            shape: 'sphere',
+            morphDuration: 1.6,
+            adaptive: true,
+            themeMode: 'deepsea',
+            debugCube: false,
+            camZoom: 90
+        };
+
+        const PALETTES = {
+            deepsea: { a: '#00F2FF', b: '#0022AA' },
+            cyber:   { a: '#2de2e6', b: '#f6019d' },
+            gold:    { a: '#FFF700', b: '#443300' },
+            custom:  { a: '#FF0000', b: '#0000FF' }
+        };
+
+        let albumColors = { a: new THREE.Color('#FFF'), b: new THREE.Color('#888') };
+        let themeColors = { a: new THREE.Color(), b: new THREE.Color() };
+        let hasCoverArt = false;
+
+        let scene, camera, renderer, composer, bloomPass, controls;
+        let system, geometry, material, debugCubeMesh;
+        let clock = new THREE.Clock();
+        let simTime = 0;
+        
+        let physLevel = { low: 0, high: 0 };
+        let lightLevel = { low: 0, all: 0 };
+        
+        let colorTarget1 = new THREE.Color();
+        let colorTarget2 = new THREE.Color();
+        
+        const shapeCache = {};
+        let isMorphing = false;
+        let morphStartTime = 0;
+
+        function boostColorSaturation(hexOrString) {
+            const col = new THREE.Color(hexOrString);
+            const hsl = {};
+            col.getHSL(hsl);
+            hsl.s = Math.min(1.0, hsl.s * 1.4);
+            hsl.l = Math.max(0.4, Math.min(0.8, hsl.l));
+            col.setHSL(hsl.h, hsl.s, hsl.l);
+            return col;
+        }
+
+        // --- VS: Physics ---
+        const VS = `
+            precision highp float;
+            uniform float uTime;
+            uniform float uMorph;
+            uniform float uAudioLow;
+            uniform float uAudioHigh;
+            uniform float uChaos;
+            uniform float uSpeed;
+            uniform float uScale;
+            uniform float uPhysPulse;
+            uniform vec3 uC1;
+            uniform vec3 uC2;
+            
+            attribute vec3 targetPos;
+            attribute float aRnd;
+            
+            varying vec3 vC;
+            varying float vA;
+
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float snoise(vec3 v) {
+                const vec2  C = vec2(1.0/6.0, 1.0/3.0);
+                const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+                vec3 i  = floor(v + dot(v, C.yyy) );
+                vec3 x0 = v - i + dot(i, C.xxx) ;
+                vec3 g = step(x0.yzx, x0.xyz);
+                vec3 l = 1.0 - g;
+                vec3 i1 = min( g.xyz, l.zxy );
+                vec3 i2 = max( g.xyz, l.zxy );
+                vec3 x1 = x0 - i1 + C.xxx;
+                vec3 x2 = x0 - i2 + C.yyy;
+                vec3 x3 = x0 - D.yyy;
+                i = mod289(i);
+                vec4 p = permute( permute( permute(
+                            i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+                float n_ = 0.142857142857;
+                vec3  ns = n_ * D.wyz - D.xzx;
+                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                vec4 x_ = floor(j * ns.z);
+                vec4 y_ = floor(j - 7.0 * x_ );
+                vec4 x = x_ *ns.x + ns.yyyy;
+                vec4 y = y_ *ns.x + ns.yyyy;
+                vec4 h = 1.0 - abs(x) - abs(y);
+                vec4 b0 = vec4( x.xy, y.xy );
+                vec4 b1 = vec4( x.zw, y.zw );
+                vec4 s0 = floor(b0)*2.0 + 1.0;
+                vec4 s1 = floor(b1)*2.0 + 1.0;
+                vec4 sh = -step(h, vec4(0.0));
+                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+                vec3 p0 = vec3(a0.xy,h.x);
+                vec3 p1 = vec3(a0.zw,h.y);
+                vec3 p2 = vec3(a1.xy,h.z);
+                vec3 p3 = vec3(a1.zw,h.w);
+                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                m = m * m;
+                return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+            }
+
+            void main() {
+                float t = uMorph;
+                float ease = t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
+                vec3 basePos = mix(position, targetPos, ease);
+                
+                vec3 pos = basePos * uScale;
+                
+                vec3 nPos = pos * (0.08/uScale) + vec3(uTime*0.15);
+                vec3 noise = vec3(snoise(nPos), snoise(nPos+10.0), snoise(nPos+20.0)) * uChaos * 4.0;
+                
+                vec3 dir = normalize(pos);
+                float safeLow = clamp(uAudioLow, 0.0, 1.0);
+                
+                // NUCLEAR BOOST
+                float expansion = (safeLow * 5.0 + sqrt(safeLow) * 15.0) * uPhysPulse;
+                
+                float jitterStrength = smoothstep(0.3, 0.6, uAudioHigh);
+                vec3 jitter = vec3(aRnd - 0.5) * jitterStrength * uPhysPulse * 2.0;
+                
+                vec3 finalPos = pos + noise + (dir * expansion) + jitter;
+                vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                
+                float sizeCalc = (2.0 + uAudioHigh*2.0) * (200.0 / -mvPosition.z);
+                gl_PointSize = max(2.0, sizeCalc);
+                
+                vC = mix(uC1, uC2, aRnd);
+                vA = 1.0;
+            }
+        `;
+
+        // --- FS: FIXED LIGHT (Linear) ---
+        const FS = `
+            precision highp float;
+            uniform float uSharp;
+            uniform float uAudioAll;
+            uniform float uLightPulse;
+            varying vec3 vC;
+            varying float vA;
+            void main() {
+                vec2 c = 2.0*gl_PointCoord-1.0;
+                float r = dot(c,c);
+                if(r>1.0) discard;
+                float a = 1.0 - smoothstep(0.0+uSharp*0.9, 1.0, r);
+                
+                // FIX: Removed complex curves. Use direct linear multiplier.
+                // uAudioAll is 0.0-1.0. uLightPulse is 0.0-100.0.
+                // At Pulse=50, Audio=0.1 -> Flash=0.5 (Visible)
+                // At Pulse=100, Audio=1.0 -> Flash=10.0 (Super Bright)
+                float pulseStr = (uLightPulse < 0.01) ? 0.0 : uLightPulse;
+                float flash = uAudioAll * pulseStr * 0.1;
+                
+                vec3 col = vC * (1.0 + flash);
+                col += vec3(flash * 0.3); // Core brightness
+
+                gl_FragColor = vec4(col, a*0.85);
+            }
+        `;
+
+        function init() {
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x000000); 
+                scene.fog = new THREE.FogExp2(0x000000, 0.015);
+
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 3000);
+                camera.position.set(0, 0, 90);
+
+                renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'high-performance'});
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                document.body.appendChild(renderer.domElement);
+
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.enableZoom = false; 
+                controls.enablePan = false;
+                controls.autoRotate = true; 
+                controls.autoRotateSpeed = 0.5;
+
+                const boxGeo = new THREE.BoxGeometry(10, 10, 10);
+                const boxMat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+                debugCubeMesh = new THREE.Mesh(boxGeo, boxMat);
+                debugCubeMesh.visible = false;
+                scene.add(debugCubeMesh);
+
+                try {
+                    const saved = localStorage.getItem('aural_cam_v13');
+                    if(saved) {
+                        const state = JSON.parse(saved);
+                        if(state.pos && !isNaN(state.pos[0]) && state.target && !isNaN(state.target[0])) {
+                            camera.position.fromArray(state.pos);
+                            controls.target.fromArray(state.target);
+                        }
+                    }
+                } catch(e){}
+                
+                setInterval(() => {
+                    if(camera && controls) {
+                        const p = camera.position;
+                        const t = controls.target;
+                        if(!isNaN(p.x) && !isNaN(t.x)) {
+                             localStorage.setItem('aural_cam_v13', JSON.stringify({
+                                pos: p.toArray(),
+                                target: t.toArray()
+                            }));
+                        }
+                    }
+                }, 1000);
+
+                const rp = new RenderPass(scene, camera);
+                bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight), 1.5, 0.4, 0.85);
+                bloomPass.threshold = 0.2; 
+                composer = new EffectComposer(renderer);
+                composer.addPass(rp);
+                composer.addPass(bloomPass);
+
+                genShapes(CONFIG.maxCount); 
+                createSystem();
+                updateThemeColors();
+                
+                window.addEventListener('resize', onResize);
+                window.wallpaperPropertyListener = { applyUserProperties: applyProps };
+                
+                if(window.wallpaperRegisterAudioListener) window.wallpaperRegisterAudioListener(onAudio);
+                if(window.wallpaperRegisterMediaThumbnailListener) window.wallpaperRegisterMediaThumbnailListener(onMediaThumbnail);
+                if(window.wallpaperRegisterMediaPlaybackListener) window.wallpaperRegisterMediaPlaybackListener(onMediaPlayback);
+
+                animate();
+            } catch (e) {
+                console.error("Init Error:", e);
+            }
+        }
+
+        function genShapes(max) {
+            const make = (n, fn) => {
+                const arr = new Float32Array(n*3);
+                for(let i=0;i<n;i++) fn(arr, i);
+                return arr;
+            };
+            shapeCache.sphere = make(max, (a,i) => {
+                const r=30*Math.cbrt(Math.random()), t=Math.random()*6.28, p=Math.acos(2*Math.random()-1);
+                a[i*3]=r*Math.sin(p)*Math.cos(t); a[i*3+1]=r*Math.sin(p)*Math.sin(t); a[i*3+2]=r*Math.cos(p);
+            });
+            // 2. Tensor (Grid)
+            shapeCache.tensor = make(max, (a,i) => {
+                const dim = Math.floor(Math.cbrt(max));
+                const spacing = 50 / dim; 
+                let x = i % dim;
+                let y = Math.floor(i / dim) % dim;
+                let z = Math.floor(i / (dim * dim));
+                a[i*3] = (x - dim/2) * spacing;
+                a[i*3+1] = (y - dim/2) * spacing;
+                a[i*3+2] = (z - dim/2) * spacing;
+            });
+            // 3. Lotus (New)
+            shapeCache.lotus = make(max, (a,i) => {
+                const r = 25 * Math.pow(Math.random(), 0.5);
+                const t = Math.random() * Math.PI * 2;
+                // Petal modulation
+                const petal = 1.0 + 0.3 * Math.sin(t * 6.0);
+                const h = Math.abs(Math.cos(t * 3.0)) * (r/10.0);
+                a[i*3] = r * Math.cos(t) * petal;
+                a[i*3+1] = h * 5.0 + (Math.random()-0.5)*2;
+                a[i*3+2] = r * Math.sin(t) * petal;
+            });
+            // 4. Helix (New)
+            shapeCache.helix = make(max, (a,i) => {
+                const t = (i / max) * 50.0; // Height/Rotation
+                const radius = 15;
+                const offset = (i % 2 === 0) ? 0 : Math.PI; // Double strand
+                a[i*3] = radius * Math.cos(t + offset) + (Math.random()-0.5)*3;
+                a[i*3+1] = (t - 25.0) * 2.0; // Vertical spread
+                a[i*3+2] = radius * Math.sin(t + offset) + (Math.random()-0.5)*3;
+            });
+            // 5. Vortex (New)
+            shapeCache.vortex = make(max, (a,i) => {
+                const r = 5 + 40 * Math.random();
+                const t = Math.random() * Math.PI * 2 * (r/5); // Spiraling
+                const depth = -200.0 / (r + 1.0) + 10;
+                a[i*3] = r * Math.cos(t);
+                a[i*3+1] = depth + (Math.random()-0.5)*2;
+                a[i*3+2] = r * Math.sin(t);
+            });
+            // Legacy
+            shapeCache.nebula = make(max, (a,i) => {
+                const r=50*Math.cbrt(Math.random()), t=Math.random()*6.28, p=Math.acos(2*Math.random()-1);
+                a[i*3]=r*Math.sin(p)*Math.cos(t); a[i*3+1]=r*Math.sin(p)*Math.sin(t); a[i*3+2]=r*Math.cos(p)*0.3;
+            });
+            shapeCache.dyson = make(max, (a,i) => {
+                const r = 40 + (Math.random() < 0.1 ? Math.random()*10 : 0);
+                const t=Math.random()*6.28, p=Math.acos(2*Math.random()-1);
+                a[i*3]=r*Math.sin(p)*Math.cos(t); a[i*3+1]=r*Math.sin(p)*Math.sin(t); a[i*3+2]=r*Math.cos(p);
+            });
+            shapeCache.pyramid = make(max, (a,i) => {
+                const h=60, y=Math.random()*h;
+                const limit=(h-y)*0.6;
+                const x=(Math.random()-0.5)*2*limit, z=(Math.random()-0.5)*2*limit;
+                a[i*3]=x; a[i*3+1]=y-30; a[i*3+2]=z;
+            });
+            shapeCache.flower = make(max, (a,i) => {
+                const t=i*2.4, r=35*Math.sqrt(i/max);
+                a[i*3]=r*Math.cos(t); a[i*3+1]=Math.pow(r,1.2)*0.3-15; a[i*3+2]=r*Math.sin(t);
+            });
+            shapeCache.neural = make(max, (a,i) => {
+                const r=40*Math.cbrt(Math.random()), t=Math.random()*6.28, p=Math.acos(2*Math.random()-1);
+                if(Math.random()>0.8){
+                    a[i*3]=r*Math.sin(p)*Math.cos(t); a[i*3+1]=r*Math.sin(p)*Math.sin(t); a[i*3+2]=r*Math.cos(p);
+                } else {
+                    a[i*3]=(Math.random()-0.5)*60; a[i*3+1]=(Math.random()-0.5)*60; a[i*3+2]=(Math.random()-0.5)*60;
+                }
+            });
+        }
+
+        function createSystem() {
+            if(system) { scene.remove(system); geometry.dispose(); material.dispose(); }
+            geometry = new THREE.BufferGeometry();
+            const pos = new Float32Array(CONFIG.maxCount * 3);
+            const target = new Float32Array(CONFIG.maxCount * 3);
+            const rnd = new Float32Array(CONFIG.maxCount);
+            const baseData = shapeCache[CONFIG.shape] || shapeCache.sphere;
+            pos.set(baseData);
+            target.set(baseData); 
+            for(let i=0;i<CONFIG.maxCount;i++) rnd[i]=Math.random();
+            geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geometry.setAttribute('targetPos', new THREE.BufferAttribute(target, 3));
+            geometry.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 1));
+            geometry.setDrawRange(0, CONFIG.maxCount);
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: {value:0},
+                    uMorph: {value:0}, 
+                    uAudioLow: {value:0},
+                    uAudioHigh: {value:0},
+                    uAudioAll: {value:0},
+                    uChaos: {value:CONFIG.chaos},
+                    uSpeed: {value:CONFIG.speed},
+                    uScale: {value:CONFIG.scale},
+                    uPhysPulse: {value:CONFIG.physPulse},
+                    uLightPulse: {value:CONFIG.lightPulse},
+                    uSharp: {value:CONFIG.sharpness},
+                    uC1: {value:new THREE.Color()},
+                    uC2: {value:new THREE.Color()},
+                    uShapeID: {value: 0.0}
+                },
+                vertexShader: VS,
+                fragmentShader: FS,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            system = new THREE.Points(geometry, material);
+            system.frustumCulled = false;
+            system.renderOrder = 999; 
+            scene.add(system);
+        }
+
+        function triggerMorph(newShape) {
+            const newData = shapeCache[newShape];
+            if(!newData) return;
+            geometry.attributes.position.array.set(geometry.attributes.targetPos.array);
+            geometry.attributes.position.needsUpdate = true;
+            geometry.attributes.targetPos.array.set(newData);
+            geometry.attributes.targetPos.needsUpdate = true;
+            material.uniforms.uShapeID.value = 0.0; // Reset ripple ID
+            isMorphing = true;
+            morphStartTime = performance.now();
+        }
+
+        function applyProps(p) {
+            if(p.debug_cube) CONFIG.debugCube = p.debug_cube.value;
+
+            if(p.particle_count) TARGETS.count = parseInt(p.particle_count.value) || 80000;
+            if(p.model_scale) TARGETS.scale = p.model_scale.value;
+            
+            if(p.phys_pulse) TARGETS.physPulse = p.phys_pulse.value;
+            if(p.phys_damping) TARGETS.physDamping = p.phys_damping.value;
+            if(p.light_pulse) TARGETS.lightPulse = p.light_pulse.value;
+            if(p.light_damping) TARGETS.lightDamping = p.light_damping.value;
+            
+            if(p.motion_chaos) TARGETS.chaos = p.motion_chaos.value;
+            if(p.time_scale) TARGETS.speed = p.time_scale.value;
+            if(p.auto_rotate) TARGETS.autoRotateSpeed = p.auto_rotate.value;
+            if(p.bloom_strength) TARGETS.bloomStrength = p.bloom_strength.value;
+            if(p.sharpness) TARGETS.sharpness = p.sharpness.value;
+            
+            if(p.cam_zoom) TARGETS.camZoom = p.cam_zoom.value;
+            if(p.cam_pan_x) TARGETS.camPanX = p.cam_pan_x.value;
+            if(p.cam_pan_y) TARGETS.camPanY = p.cam_pan_y.value;
+
+            if(p.model_type) {
+                const s = p.model_type.value;
+                if(s !== CONFIG.shape) { CONFIG.shape = s; triggerMorph(s); }
+            }
+            if(p.morph_duration) CONFIG.morphDuration = p.morph_duration.value;
+            if(p.adaptive_colors) CONFIG.adaptive = p.adaptive_colors.value;
+            if(p.theme_mode) { CONFIG.themeMode = p.theme_mode.value; updateThemeColors(); }
+            if(p.custom_color_primary) {
+                const c = p.custom_color_primary.value.split(' ').map(Number);
+                PALETTES.custom.a = new THREE.Color(c[0], c[1], c[2]);
+                updateThemeColors();
+            }
+            if(p.custom_color_secondary) {
+                const c = p.custom_color_secondary.value.split(' ').map(Number);
+                PALETTES.custom.b = new THREE.Color(c[0], c[1], c[2]);
+                updateThemeColors();
+            }
+        }
+
+        function updateThemeColors() {
+            const p = PALETTES[CONFIG.themeMode] || PALETTES.custom;
+            if(p.a instanceof THREE.Color) {
+                themeColors.a.copy(p.a);
+                themeColors.b.copy(p.b);
+            } else {
+                themeColors.a.set(p.a);
+                themeColors.b.set(p.b);
+            }
+        }
+
+        function onMediaPlayback(e) {
+            if(e.state === 0) hasCoverArt = false;
+        }
+
+        function onMediaThumbnail(e) {
+            if(e.primaryColor) {
+                hasCoverArt = true;
+                albumColors.a = boostColorSaturation(e.primaryColor);
+                if(e.secondaryColor) {
+                    albumColors.b = boostColorSaturation(e.secondaryColor);
+                } else {
+                    const col = albumColors.a.clone();
+                    const hsl = {}; col.getHSL(hsl);
+                    col.setHSL((hsl.h + 0.5)%1.0, hsl.s, hsl.l);
+                    albumColors.b = col;
+                }
+            } else {
+                hasCoverArt = false;
+            }
+        }
+
+        function onAudio(arr) {
+            let low=0, high=0, all=0;
+            for(let i=0; i<8; i++) low += arr[i];
+            for(let i=30; i<60; i++) high += arr[i];
+            for(let i=0; i<64; i++) all += arr[i];
+            
+            const rawLow = low/8/255;
+            const rawHigh = high/30/255;
+            const rawAll = all/64/255;
+
+            const physSmooth = Math.pow(1.0 - CONFIG.physDamping, 3.0);
+            const lightSmooth = Math.pow(1.0 - CONFIG.lightDamping, 3.0);
+
+            physLevel.low += (rawLow - physLevel.low) * physSmooth;
+            physLevel.high += (rawHigh - physLevel.high) * physSmooth;
+            
+            // Light receives rawAll (Full spectrum) for consistent flash
+            lightLevel.all += (rawAll - lightLevel.all) * lightSmooth; 
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function smoothStepProp(key, speed = 0.05) {
+            if(Math.abs(CONFIG[key] - TARGETS[key]) > 0.0001) {
+                CONFIG[key] += (TARGETS[key] - CONFIG[key]) * speed;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            
+            smoothStepProp('scale');
+            smoothStepProp('physPulse');
+            smoothStepProp('physDamping');
+            smoothStepProp('lightPulse');
+            smoothStepProp('lightDamping');
+            smoothStepProp('chaos');
+            smoothStepProp('speed');
+            smoothStepProp('autoRotateSpeed');
+            smoothStepProp('bloomStrength');
+            smoothStepProp('sharpness');
+            smoothStepProp('camZoom', 0.05); 
+            
+            const safeTarget = isNaN(TARGETS.count) ? 80000 : TARGETS.count;
+            if(Math.abs(CONFIG.currentCount - safeTarget) > 50) {
+                CONFIG.currentCount += (safeTarget - CONFIG.currentCount) * 5.0 * dt;
+                geometry.setDrawRange(0, Math.max(100, Math.floor(CONFIG.currentCount)));
+            }
+
+            simTime += dt * CONFIG.speed;
+
+            if(debugCubeMesh) {
+                debugCubeMesh.visible = CONFIG.debugCube;
+                if(CONFIG.debugCube) {
+                    debugCubeMesh.rotation.x += 0.01;
+                    debugCubeMesh.rotation.y += 0.01;
+                }
+            }
+
+            if(isMorphing) {
+                const elapsed = (performance.now() - morphStartTime) / 1000;
+                let progress = elapsed / CONFIG.morphDuration;
+                if(progress >= 1.0) {
+                    progress = 1.0;
+                    isMorphing = false;
+                    geometry.attributes.position.array.set(geometry.attributes.targetPos.array);
+                    geometry.attributes.position.needsUpdate = true;
+                    material.uniforms.uMorph.value = 0.0;
+                } else {
+                    material.uniforms.uMorph.value = progress;
+                }
+            }
+
+            let targetA, targetB;
+            if (CONFIG.adaptive && hasCoverArt) {
+                targetA = albumColors.a;
+                targetB = albumColors.b;
+            } else {
+                targetA = themeColors.a;
+                targetB = themeColors.b;
+            }
+            colorTarget1.lerp(targetA, 0.02);
+            colorTarget2.lerp(targetB, 0.02);
+
+            if(material) {
+                material.uniforms.uTime.value = simTime;
+                material.uniforms.uAudioLow.value = physLevel.low;
+                material.uniforms.uAudioHigh.value = physLevel.high;
+                // PASSING ALL
+                material.uniforms.uAudioAll.value = lightLevel.all;
+                
+                material.uniforms.uChaos.value = CONFIG.chaos;
+                material.uniforms.uScale.value = CONFIG.scale;
+                material.uniforms.uPhysPulse.value = CONFIG.physPulse;
+                material.uniforms.uLightPulse.value = CONFIG.lightPulse;
+                material.uniforms.uSharp.value = CONFIG.sharpness;
+                
+                material.uniforms.uC1.value.copy(colorTarget1);
+                material.uniforms.uC2.value.copy(colorTarget2);
+            }
+            
+            if(bloomPass) bloomPass.strength = CONFIG.bloomStrength;
+
+            if(controls) {
+                controls.autoRotateSpeed = CONFIG.autoRotateSpeed * 20.0;
+                controls.update();
+                
+                const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+                if(Math.abs(offset.length() - CONFIG.camZoom) > 0.1) {
+                    offset.setLength(CONFIG.camZoom);
+                    camera.position.copy(controls.target).add(offset);
+                }
+                
+                controls.target.x += (TARGETS.camPanX - controls.target.x) * 0.1;
+                controls.target.y += (TARGETS.camPanY - controls.target.y) * 0.1;
+            }
+
+            composer.render();
+        }
+
+        init();
+    </script>
+</body>
+</html>

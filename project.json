@@ -1,0 +1,426 @@
+{
+	"contentrating" : "Everyone",
+	"description" : "基于音频响应的3D粒子艺术系统，通过噪声算法和物理模拟将音乐实时转化为绚丽的动态视觉盛宴。",
+	"file" : "index.html",
+	"general" : 
+	{
+		"localization" : 
+		{
+			"en-us" : 
+			{
+				"ui_adaptive_colors" : "Smart Adaptive",
+				"ui_auto_rotate" : "Rotation",
+				"ui_bloom_strength" : "Glow Intensity",
+				"ui_cam_pan_x" : "Pan X",
+				"ui_cam_pan_y" : "Pan Y",
+				"ui_cam_zoom" : "Camera Distance",
+				"ui_custom_color_primary" : "Custom Primary",
+				"ui_custom_color_secondary" : "Custom Secondary",
+				"ui_debug_cube" : "Debug Beacon",
+				"ui_light_damping" : "Flash Damping",
+				"ui_light_pulse" : "Flash Response",
+				"ui_model_dyson" : "Dyson Sphere",
+				"ui_model_flower" : "Flower",
+				"ui_model_helix" : "Double Helix",
+				"ui_model_lotus" : "Quantum Lotus",
+				"ui_model_nebula" : "Nebula",
+				"ui_model_neural" : "Neural Network",
+				"ui_model_pyramid" : "Pyramid",
+				"ui_model_scale" : "Scale",
+				"ui_model_sphere" : "Sphere",
+				"ui_model_tensor" : "Tensor Network",
+				"ui_model_type" : "Shape",
+				"ui_model_vortex" : "Deep Vortex",
+				"ui_morph_duration" : "Morph Duration",
+				"ui_motion_chaos" : "Entropy",
+				"ui_particle_count" : "Count",
+				"ui_phys_damping" : "Physics Damping",
+				"ui_phys_pulse" : "Beat Response",
+				"ui_schemecolor" : "System Accent",
+				"ui_sharpness" : "Sharpness",
+				"ui_theme_custom" : "Custom",
+				"ui_theme_cyber" : "Night City",
+				"ui_theme_deepsea" : "Deep Sea",
+				"ui_theme_gold" : "Black Gold",
+				"ui_theme_mode" : "Color Theme",
+				"ui_time_scale" : "Evolution Speed"
+			},
+			"zh-chs" : 
+			{
+				"ui_adaptive_colors" : "智能取色",
+				"ui_auto_rotate" : "自转速率",
+				"ui_bloom_strength" : "光晕强度",
+				"ui_cam_pan_x" : "水平位移",
+				"ui_cam_pan_y" : "垂直位移",
+				"ui_cam_zoom" : "镜头视距",
+				"ui_custom_color_primary" : "自定义主",
+				"ui_custom_color_secondary" : "自定义副",
+				"ui_debug_cube" : "调试信标",
+				"ui_light_damping" : "光感阻尼",
+				"ui_light_pulse" : "光感律动",
+				"ui_model_dyson" : "戴森球",
+				"ui_model_flower" : "量子繁花",
+				"ui_model_helix" : "双重螺旋",
+				"ui_model_lotus" : "量子莲花",
+				"ui_model_nebula" : "星云",
+				"ui_model_neural" : "神经网络",
+				"ui_model_pyramid" : "金字塔",
+				"ui_model_scale" : "模型尺度",
+				"ui_model_sphere" : "球体",
+				"ui_model_tensor" : "张量网络",
+				"ui_model_type" : "模型形态",
+				"ui_model_vortex" : "深空星涡",
+				"ui_morph_duration" : "变形时长",
+				"ui_motion_chaos" : "混沌熵值",
+				"ui_particle_count" : "粒子总数",
+				"ui_phys_damping" : "物理阻尼",
+				"ui_phys_pulse" : "物理律动",
+				"ui_schemecolor" : "系统色调",
+				"ui_sharpness" : "边缘锐度",
+				"ui_theme_custom" : "自定义",
+				"ui_theme_cyber" : "夜之城",
+				"ui_theme_deepsea" : "深海",
+				"ui_theme_gold" : "黑金",
+				"ui_theme_mode" : "色彩主题",
+				"ui_time_scale" : "时间流速"
+			}
+		},
+		"properties" : 
+		{
+			"adaptive_colors" : 
+			{
+				"index" : 1,
+				"order" : 101,
+				"text" : "ui_adaptive_colors",
+				"type" : "bool",
+				"value" : true
+			},
+			"auto_rotate" : 
+			{
+				"index" : 21,
+				"max" : 1,
+				"min" : -1,
+				"order" : 121,
+				"precision" : 4,
+				"step" : 0.0001,
+				"text" : "ui_auto_rotate",
+				"type" : "slider",
+				"value" : 0.1
+			},
+			"bloom_strength" : 
+			{
+				"index" : 9,
+				"max" : 3,
+				"min" : 0,
+				"order" : 109,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_bloom_strength",
+				"type" : "slider",
+				"value" : 1.2
+			},
+			"cam_pan_x" : 
+			{
+				"index" : 12,
+				"max" : 100,
+				"min" : -100,
+				"order" : 112,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_cam_pan_x",
+				"type" : "slider",
+				"value" : 0
+			},
+			"cam_pan_y" : 
+			{
+				"index" : 13,
+				"max" : 100,
+				"min" : -100,
+				"order" : 113,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_cam_pan_y",
+				"type" : "slider",
+				"value" : 0
+			},
+			"cam_zoom" : 
+			{
+				"index" : 11,
+				"max" : 300,
+				"min" : 1,
+				"order" : 111,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_cam_zoom",
+				"type" : "slider",
+				"value" : 90
+			},
+			"custom_color_primary" : 
+			{
+				"condition" : "theme_mode.value === 'custom'",
+				"index" : 3,
+				"order" : 103,
+				"text" : "ui_custom_color_primary",
+				"type" : "color",
+				"value" : "1 0.2 0.4"
+			},
+			"custom_color_secondary" : 
+			{
+				"condition" : "theme_mode.value === 'custom'",
+				"index" : 4,
+				"order" : 104,
+				"text" : "ui_custom_color_secondary",
+				"type" : "color",
+				"value" : "0.2 0.4 1"
+			},
+			"debug_cube" : 
+			{
+				"index" : 23,
+				"order" : 123,
+				"text" : "ui_debug_cube",
+				"type" : "bool",
+				"value" : false
+			},
+			"group_debug" : 
+			{
+				"index" : 22,
+				"order" : 122,
+				"text" : "调试模式 DEBUG",
+				"type" : "group",
+				"value" : ""
+			},
+			"group_dynamics" : 
+			{
+				"index" : 14,
+				"order" : 114,
+				"text" : "物理动力学 DYNAMICS",
+				"type" : "group",
+				"value" : ""
+			},
+			"group_visuals" : 
+			{
+				"index" : 0,
+				"order" : 100,
+				"text" : "视觉与特效 VISUALS",
+				"type" : "group",
+				"value" : ""
+			},
+			"light_damping" : 
+			{
+				"index" : 18,
+				"max" : 0.999,
+				"min" : 0.001,
+				"order" : 118,
+				"precision" : 3,
+				"step" : 0.001,
+				"text" : "ui_light_damping",
+				"type" : "slider",
+				"value" : 0.3
+			},
+			"light_pulse" : 
+			{
+				"index" : 17,
+				"max" : 100,
+				"min" : 0,
+				"order" : 117,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_light_pulse",
+				"type" : "slider",
+				"value" : 5
+			},
+			"model_scale" : 
+			{
+				"index" : 8,
+				"max" : 2.5,
+				"min" : 0.5,
+				"order" : 108,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_model_scale",
+				"type" : "slider",
+				"value" : 1.1
+			},
+			"model_type" : 
+			{
+				"index" : 5,
+				"options" : 
+				[
+					{
+						"label" : "ui_model_sphere",
+						"value" : "sphere"
+					},
+					{
+						"label" : "ui_model_lotus",
+						"value" : "lotus"
+					},
+					{
+						"label" : "ui_model_helix",
+						"value" : "helix"
+					},
+					{
+						"label" : "ui_model_vortex",
+						"value" : "vortex"
+					},
+					{
+						"label" : "ui_model_nebula",
+						"value" : "nebula"
+					},
+					{
+						"label" : "ui_model_tensor",
+						"value" : "tensor"
+					},
+					{
+						"label" : "ui_model_neural",
+						"value" : "neural"
+					},
+					{
+						"label" : "ui_model_dyson",
+						"value" : "dyson"
+					},
+					{
+						"label" : "ui_model_pyramid",
+						"value" : "pyramid"
+					},
+					{
+						"label" : "ui_model_flower",
+						"value" : "flower"
+					}
+				],
+				"order" : 105,
+				"text" : "ui_model_type",
+				"type" : "combo",
+				"value" : "sphere"
+			},
+			"morph_duration" : 
+			{
+				"index" : 6,
+				"max" : 5,
+				"min" : 0.5,
+				"order" : 106,
+				"precision" : 1,
+				"step" : 0.1,
+				"text" : "ui_morph_duration",
+				"type" : "slider",
+				"value" : 1.6
+			},
+			"motion_chaos" : 
+			{
+				"index" : 19,
+				"max" : 10,
+				"min" : 0,
+				"order" : 119,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_motion_chaos",
+				"type" : "slider",
+				"value" : 0.5
+			},
+			"particle_count" : 
+			{
+				"index" : 7,
+				"max" : 200000,
+				"min" : 10000,
+				"order" : 107,
+				"step" : 5000,
+				"text" : "ui_particle_count",
+				"type" : "slider",
+				"value" : 80000
+			},
+			"phys_damping" : 
+			{
+				"index" : 16,
+				"max" : 0.999,
+				"min" : 0.001,
+				"order" : 116,
+				"precision" : 3,
+				"step" : 0.001,
+				"text" : "ui_phys_damping",
+				"type" : "slider",
+				"value" : 0.5
+			},
+			"phys_pulse" : 
+			{
+				"index" : 15,
+				"max" : 50,
+				"min" : 0,
+				"order" : 115,
+				"precision" : 1,
+				"step" : 0.1,
+				"text" : "ui_phys_pulse",
+				"type" : "slider",
+				"value" : 5
+			},
+			"schemecolor" : 
+			{
+				"index" : 1,
+				"order" : 1,
+				"text" : "ui_schemecolor",
+				"type" : "color",
+				"value" : "0 0.5 1"
+			},
+			"sharpness" : 
+			{
+				"index" : 10,
+				"max" : 1,
+				"min" : 0,
+				"order" : 110,
+				"precision" : 2,
+				"step" : 0.01,
+				"text" : "ui_sharpness",
+				"type" : "slider",
+				"value" : 0.8
+			},
+			"theme_mode" : 
+			{
+				"index" : 2,
+				"options" : 
+				[
+					{
+						"label" : "ui_theme_deepsea",
+						"value" : "deepsea"
+					},
+					{
+						"label" : "ui_theme_cyber",
+						"value" : "cyber"
+					},
+					{
+						"label" : "ui_theme_gold",
+						"value" : "gold"
+					},
+					{
+						"label" : "ui_theme_custom",
+						"value" : "custom"
+					}
+				],
+				"order" : 102,
+				"text" : "ui_theme_mode",
+				"type" : "combo",
+				"value" : "deepsea"
+			},
+			"time_scale" : 
+			{
+				"index" : 20,
+				"max" : 2,
+				"min" : 0,
+				"order" : 120,
+				"precision" : 3,
+				"step" : 0.001,
+				"text" : "ui_time_scale",
+				"type" : "slider",
+				"value" : 0.5
+			}
+		},
+		"supportsaudioprocessing" : true
+	},
+	"preview" : "preview.jpg",
+	"ratingsex" : "none",
+	"ratingviolence" : "none",
+	"tags" : [ "Sci-Fi" ],
+	"title" : "Aural Pro",
+	"type" : "web",
+	"version" : 2,
+	"visibility" : "public",
+	"workshopid" : "3615005044",
+	"workshopurl" : "steam://url/CommunityFilePage/3615005044"
+}
